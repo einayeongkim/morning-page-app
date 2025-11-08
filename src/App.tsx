@@ -1,16 +1,109 @@
-import { useState, useEffect } from 'react';
-import { WelcomeScreen } from './components/WelcomeScreen';
-import { LoginScreen } from './components/LoginScreen';
-import { EmailAuthScreen } from './components/EmailAuthScreen';
-import { ReminderSetupScreen } from './components/ReminderSetupScreen';
-import { EditorScreen } from './components/EditorScreen';
-import { HomeScreen } from './components/HomeScreen';
-import { PastEntryScreen } from './components/PastEntryScreen';
-import { SettingsScreen } from './components/SettingsScreen';
-import { AccountScreen } from './components/AccountScreen';
-import { createClient } from './utils/supabase/client';
-import { toast } from 'sonner@2.0.3';
-import { Toaster } from './components/ui/sonner';
+import React, { useState, useEffect } from 'react';
+// import { WelcomeScreen } from './components/WelcomeScreen'; // CPO: 우선 목업으로 대체
+// import { LoginScreen } from './components/LoginScreen'; // CPO: 우선 목업으로 대체
+// ... (다른 모든 컴포넌트 import를 목업으로 대체) ...
+// import { createClient } from './utils/supabase/client'; // CPO: Supabase Client를 여기에 통합
+
+// [CPO 수정] 'npm install'로 설치한 '진짜' 라이브러리를 import합니다.
+import { createClient as createSupabaseClient } from "@supabase/supabase-js";
+import { Toaster, toast } from "sonner"; // 'sonner@2.0.3'는 무시하고 최신 버전을 import
+
+// -- 1. Supabase 클라이언트 설정 (PO님의 `utils/supabase/client` 대체) --
+// Vercel 환경 변수에서 Supabase URL과 Key를 읽어옵니다.
+// (vite.config.ts의 'define' 설정을 통해 주입됩니다)
+// @ts-ignore
+const supabaseUrl = __SUPABASE_URL__;
+// @ts-ignore
+const supabaseKey = __SUPABASE_KEY__;
+
+const createClient = () => {
+  if (!supabaseUrl || !supabaseKey) {
+    console.error("Supabase URL/Key가 없습니다. Vercel 환경변수(VITE_...)를 확인하세요.");
+    return { 
+      auth: { 
+        getSession: async () => ({ data: { session: null } }),
+        onAuthStateChange: () => ({ data: { subscription: { unsubscribe: () => {} } } }),
+        signInWithOAuth: async () => ({ error: { message: "Supabase Key 없음" } }),
+        signOut: async () => ({}),
+        updateUser: async () => ({ error: { message: "Supabase Key 없음" } }),
+        signInWithPassword: async () => ({ error: { message: "Supabase Key 없음" } }),
+        signUp: async () => ({ error: { message: "Supabase Key 없음" } }),
+      },
+      from: (tableName: string) => ({ 
+        upsert: async () => ({ error: { message: "Supabase Key 없음" } }),
+        select: () => ({ 
+          eq: () => ({ 
+            single: async () => ({ data: null, error: { message: "Supabase Key 없음" } }) 
+          })
+        })
+      }) 
+    } as any;
+  }
+  return createSupabaseClient(supabaseUrl, supabaseKey);
+};
+
+// -- 2. PO님의 `src/components` 목업 (Mockup) --
+// PO님의 `App.tsx`가 'import'하는 9개의 컴포넌트를 임시로 만듭니다.
+
+const PlaceholderComponent = ({ name, onBack, children }: { name: string; onBack?: () => void; children?: React.ReactNode }) => (
+  <div style={{ padding: '20px', border: '2px dashed #ccc', margin: '10px' }}>
+    <h2 style={{ fontWeight: 'bold' }}>{name} (목업)</h2>
+    {onBack && <button onClick={onBack}>&lt; 뒤로가기</button>}
+    <div>{children}</div>
+  </div>
+);
+const WelcomeScreen = ({ onGetStarted }: { onGetStarted: () => void }) => (
+  <PlaceholderComponent name="WelcomeScreen"><button onClick={onGetStarted}>시작하기</button></PlaceholderComponent>
+);
+const LoginScreen = ({ onLogin, onEmailLogin }: { onLogin: (provider: any) => void; onEmailLogin: () => void; }) => (
+  <PlaceholderComponent name="LoginScreen">
+    <button onClick={() => onLogin('google')}>Google 로그인</button>
+    <button onClick={onEmailLogin}>Email 로그인</button>
+  </PlaceholderComponent>
+);
+const EmailAuthScreen = ({ onBack, onSuccess }: { onBack: () => void; onSuccess: (user: any) => void; }) => (
+  <PlaceholderComponent name="EmailAuthScreen" onBack={onBack}>
+    <button onClick={() => onSuccess({ id: 'email-user', email: 'test@email.com' })}>가짜 이메일 인증</button>
+  </PlaceholderComponent>
+);
+const ReminderSetupScreen = ({ onSetReminder, onSkip }: { onSetReminder: (time: string) => void; onSkip: () => void; }) => (
+  <PlaceholderComponent name="ReminderSetupScreen">
+    <button onClick={() => onSetReminder('08:00')}>08:00 설정</button>
+    <button onClick={onSkip}>건너뛰기</button>
+  </PlaceholderComponent>
+);
+const EditorScreen = ({ user, onSave, onBack }: { user: User; onSave: (content: string, date: string) => void; onBack: () => void; }) => (
+  <PlaceholderComponent name="EditorScreen" onBack={onBack}>
+    <p>{user.name}님, 오늘 일기를 쓰세요.</p>
+    <button onClick={() => onSave('테스트 일기', new Date().toISOString().split('T')[0])}>저장</button>
+  </PlaceholderComponent>
+);
+const HomeScreen = ({ user, onWriteToday, onViewEntry, onLogout, onNavigateToSettings }: { user: User; onWriteToday: () => void; onViewEntry: (date: string) => void; onLogout: () => void; onNavigateToSettings: () => void; }) => (
+  <PlaceholderComponent name="HomeScreen">
+    <p>{user.name}님, 환영합니다.</p>
+    <button onClick={onWriteToday}>오늘 일기 쓰기</button>
+    <button onClick={() => onViewEntry('2025-01-01')}>과거 일기 보기 (목업)</button>
+    <button onClick={onNavigateToSettings}>설정</button>
+    <button onClick={onLogout}>로그아웃</button>
+  </PlaceholderComponent>
+);
+const PastEntryScreen = ({ user, date, onBack }: { user: User; date: string; onBack: () => void; }) => (
+  <PlaceholderComponent name="PastEntryScreen" onBack={onBack}><p>{date}의 일기 내용 (목업)</p></PlaceholderComponent>
+);
+const SettingsScreen = ({ onBack, onNavigateToAccount }: { onBack: () => void; onNavigateToAccount: () => void; }) => (
+  <PlaceholderComponent name="SettingsScreen" onBack={onBack}>
+    <button onClick={onNavigateToAccount}>계정 설정</button>
+  </PlaceholderComponent>
+);
+const AccountScreen = ({ email, onBack, onLogout }: { email: string; onBack: () => void; onLogout: () => void; }) => (
+  <PlaceholderComponent name="AccountScreen" onBack={onBack}>
+    <p>계정: {email}</p>
+    <button onClick={onLogout}>로그아웃</button>
+  </PlaceholderComponent>
+);
+
+// -- 3. PO님의 `App.tsx` 코드 (본체) --
+// (PO님께서 주신 코드 원본)
 
 type Screen = 'welcome' | 'login' | 'email-auth' | 'reminder-setup' | 'editor' | 'home' | 'past-entry' | 'settings' | 'account';
 
@@ -71,7 +164,7 @@ export default function App() {
     };
   }, []);
 
-  const handleLogin = async (provider: 'kakao' | 'apple') => {
+  const handleLogin = async (provider: 'kakao' | 'apple' | 'google') => { // google 포함
     const supabase = createClient();
     const { error } = await supabase.auth.signInWithOAuth({
       provider: provider,
@@ -82,14 +175,7 @@ export default function App() {
     
     if (error) {
       console.error(`${provider} login error:`, error.message);
-      // Fallback to mock for development
-      const mockUser: User = {
-        id: `user-${Date.now()}`,
-        name: provider === 'kakao' ? 'Kakao User' : 'Apple User',
-        email: `user@${provider}.com`,
-      };
-      setUser(mockUser);
-      setCurrentScreen('reminder-setup');
+      // (목업 로직 삭제)
     }
   };
 
@@ -246,3 +332,12 @@ export default function App() {
     </div>
   );
 }
+
+// -- 4. React 앱 마운트 --
+// index.html의 'root' div에 App 컴포넌트를 렌더링합니다.
+const root = ReactDOM.createRoot(document.getElementById('root') as HTMLElement);
+root.render(
+  <React.StrictMode>
+    <App />
+  </React.StrictMode>,
+);
