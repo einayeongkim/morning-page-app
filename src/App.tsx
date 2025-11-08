@@ -1,80 +1,248 @@
-import { Button } from './ui/button';
-import { motion } from 'motion/react';
-import { createClient } from '../utils/supabase/client';
+import { useState, useEffect } from 'react';
+import { WelcomeScreen } from './components/WelcomeScreen';
+import { LoginScreen } from './components/LoginScreen';
+import { EmailAuthScreen } from './components/EmailAuthScreen';
+import { ReminderSetupScreen } from './components/ReminderSetupScreen';
+import { EditorScreen } from './components/EditorScreen';
+import { HomeScreen } from './components/HomeScreen';
+import { PastEntryScreen } from './components/PastEntryScreen';
+import { SettingsScreen } from './components/SettingsScreen';
+import { AccountScreen } from './components/AccountScreen';
+import { createClient } from './utils/supabase/client';
+import { toast } from 'sonner@2.0.3';
+import { Toaster } from './components/ui/sonner';
 
-interface LoginScreenProps {
-  onLogin: (provider: string) => void;
-  onEmailLogin: () => void;
-  onSocialLoginSuccess: (user: { id: string; name: string; email: string }) => void;
+type Screen = 'welcome' | 'login' | 'email-auth' | 'reminder-setup' | 'editor' | 'home' | 'past-entry' | 'settings' | 'account';
+
+interface User {
+  id: string;
+  email: string;
+  name: string;
+  reminderTime?: string;
 }
 
-export function LoginScreen({ onLogin, onEmailLogin, onSocialLoginSuccess }: LoginScreenProps) {
-  const handleAppleLogin = async () => {
-    try {
-      const supabase = createClient();
-      // Note: For Apple OAuth to work, you need to configure it in Supabase Dashboard
-      // Visit: https://supabase.com/docs/guides/auth/social-login
-      const { data, error } = await supabase.auth.signInWithOAuth({
-        provider: 'apple',
-        options: {
-          redirectTo: window.location.origin,
-        },
-      });
+export default function App() {
+  const [currentScreen, setCurrentScreen] = useState<Screen>('welcome');
+  const [user, setUser] = useState<User | null>(null);
+  const [selectedDate, setSelectedDate] = useState<string | null>(null);
+  const [refreshTrigger, setRefreshTrigger] = useState(0);
 
-      if (error) {
-        console.error('Apple login error:', error);
-        // Fallback to mock login for now
-        onLogin('apple');
+  useEffect(() => {
+    // Check if user is already logged in with Supabase
+    const checkSession = async () => {
+      const supabase = createClient();
+      const { data: { session } } = await supabase.auth.getSession();
+      
+      if (session?.user) {
+        const userData = {
+          id: session.user.id,
+          email: session.user.email!,
+          name: session.user.user_metadata?.name || '',
+          reminderTime: session.user.user_metadata?.reminderTime,
+        };
+        setUser(userData);
+        setCurrentScreen('home');
       }
-    } catch (err) {
-      console.error('Apple login exception:', err);
-      // Fallback to mock login
-      onLogin('apple');
+    };
+
+    checkSession();
+
+    // Listen for auth state changes
+    const supabase = createClient();
+    const { data: authListener } = supabase.auth.onAuthStateChange(
+      (_event, session) => {
+        if (session?.user) {
+          const userData = {
+            id: session.user.id,
+            email: session.user.email!,
+            name: session.user.user_metadata?.name || '',
+            reminderTime: session.user.user_metadata?.reminderTime,
+          };
+          setUser(userData);
+        } else {
+          setUser(null);
+          setCurrentScreen('welcome');
+        }
+      }
+    );
+
+    return () => {
+      authListener.subscription.unsubscribe();
+    };
+  }, []);
+
+  const handleLogin = async (provider: 'kakao' | 'apple') => {
+    const supabase = createClient();
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: provider,
+      options: {
+        redirectTo: window.location.origin,
+      },
+    });
+    
+    if (error) {
+      console.error(`${provider} login error:`, error.message);
+      // Fallback to mock for development
+      const mockUser: User = {
+        id: `user-${Date.now()}`,
+        name: provider === 'kakao' ? 'Kakao User' : 'Apple User',
+        email: `user@${provider}.com`,
+      };
+      setUser(mockUser);
+      setCurrentScreen('reminder-setup');
     }
   };
+
+  const handleAuthSuccess = (userData: { id: string; name: string; email: string }) => {
+    const newUser: User = {
+      id: userData.id,
+      name: userData.name,
+      email: userData.email,
+    };
+    setUser(newUser);
+    setCurrentScreen('reminder-setup');
+  };
+
+  const handleReminderSetup = async (time: string) => {
+    if (!user) return;
+    
+    const supabase = createClient();
+    const { error } = await supabase.auth.updateUser({
+      data: { reminderTime: time }
+    });
+
+    if (error) {
+      console.error('Reminder setup error:', error.message);
+    } else {
+      setUser({ ...user, reminderTime: time });
+    }
+    
+    setCurrentScreen('home');
+  };
+
+  const handleSkipReminder = () => {
+    setCurrentScreen('home');
+  };
+
+  const handleSaveEntry = async (content: string, date: string) => {
+    if (!user) return;
+
+    const supabase = createClient();
+    const { error } = await supabase
+      .from('journal_entries')
+      .upsert({
+        user_id: user.id,
+        date: date,
+        content: content,
+      }, { 
+        onConflict: 'user_id,date'
+      });
+
+    if (error) {
+      console.error('Save entry error:', error.message);
+      toast.error('저장 실패', {
+        description: '모닝 페이지를 저장하는 중 오류가 발생했습니다.',
+      });
+    } else {
+      toast.success('저장 완료', {
+        description: '모닝 페이지가 저장되었습니다.',
+      });
+      setRefreshTrigger(prev => prev + 1); // Trigger refresh
+      setCurrentScreen('home');
+    }
+  };
+
+  const handleViewPastEntry = (date: string) => {
+    setSelectedDate(date);
+    setCurrentScreen('past-entry');
+  };
+
+  const handleWriteToday = () => {
+    setSelectedDate(null);
+    setCurrentScreen('editor');
+  };
+
+  const handleBackToHome = () => {
+    setCurrentScreen('home');
+  };
+
+  const handleLogout = async () => {
+    const supabase = createClient();
+    await supabase.auth.signOut();
+    setUser(null);
+    setCurrentScreen('welcome');
+  };
+
   return (
-    <div className="flex flex-col items-center justify-center min-h-screen p-8 bg-gray-50">
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.5 }}
-        className="w-full max-w-md"
-      >
-        <h2 className="mb-8 text-center text-gray-700">Sign Up or Log In</h2>
+    <div className="min-h-screen bg-gray-50">
+      <Toaster />
+      {currentScreen === 'welcome' && (
+        <WelcomeScreen onGetStarted={() => setCurrentScreen('login')} />
+      )}
+      
+      {currentScreen === 'login' && (
+        <LoginScreen 
+          onLogin={handleLogin}
+          onEmailLogin={() => setCurrentScreen('email-auth')}
+          onSocialLoginSuccess={handleAuthSuccess}
+        />
+      )}
+      
+      {currentScreen === 'email-auth' && (
+        <EmailAuthScreen 
+          onBack={() => setCurrentScreen('login')}
+          onSuccess={handleAuthSuccess}
+        />
+      )}
+      
+      {currentScreen === 'reminder-setup' && (
+        <ReminderSetupScreen 
+          onSetReminder={handleReminderSetup}
+          onSkip={handleSkipReminder}
+        />
+      )}
+      
+      {currentScreen === 'editor' && user && (
+        <EditorScreen 
+          user={user}
+          onSave={handleSaveEntry}
+          onBack={handleBackToHome}
+        />
+      )}
+      
+      {currentScreen === 'home' && user && (
+        <HomeScreen 
+          key={refreshTrigger}
+          user={user}
+          onWriteToday={handleWriteToday}
+          onViewEntry={handleViewPastEntry}
+          onLogout={handleLogout}
+          onNavigateToSettings={() => setCurrentScreen('settings')}
+        />
+      )}
+      
+      {currentScreen === 'past-entry' && user && selectedDate && (
+        <PastEntryScreen 
+          user={user}
+          date={selectedDate}
+          onBack={handleBackToHome}
+        />
+      )}
 
-        <div className="space-y-4">
-          <Button
-            onClick={onEmailLogin}
-            variant="outline"
-            className="w-full border-gray-300 text-gray-700"
-            size="lg"
-          >
-            Continue with Email
-          </Button>
+      {currentScreen === 'settings' && (
+        <SettingsScreen 
+          onBack={handleBackToHome}
+          onNavigateToAccount={() => setCurrentScreen('account')}
+        />
+      )}
 
-          <Button
-            onClick={handleAppleLogin}
-            className="w-full bg-black hover:bg-gray-900 text-white"
-            size="lg"
-          >
-            <svg className="w-5 h-5 mr-2" viewBox="0 0 24 24" fill="currentColor">
-              <path d="M17.05 20.28c-.98.95-2.05.8-3.08.35-1.09-.46-2.09-.48-3.24 0-1.44.62-2.2.44-3.06-.35C2.79 15.25 3.51 7.59 9.05 7.31c1.35.07 2.29.74 3.08.8 1.18-.24 2.31-.93 3.57-.84 1.51.12 2.65.72 3.4 1.8-3.12 1.87-2.38 5.98.48 7.13-.57 1.5-1.31 2.99-2.54 4.09l.01-.01zM12.03 7.25c-.15-2.23 1.66-4.07 3.74-4.25.29 2.58-2.34 4.5-3.74 4.25z"/>
-            </svg>
-            Continue with Apple
-          </Button>
-        </div>
-
-        <p className="mt-8 text-center text-xs text-gray-400">
-          By continuing, you agree to our{' '}
-          <a href="#" className="text-gray-600 hover:underline">
-            Terms & Conditions
-          </a>{' '}
-          and{' '}
-          <a href="#" className="text-gray-600 hover:underline">
-            Privacy Policy
-          </a>
-        </p>
-      </motion.div>
+      {currentScreen === 'account' && user && (
+        <AccountScreen 
+          email={user.email}
+          onBack={() => setCurrentScreen('settings')}
+          onLogout={handleLogout}
+        />
+      )}
     </div>
   );
 }
