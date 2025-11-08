@@ -14,8 +14,8 @@ const { Toaster: SonnerToaster, toast: sonnerToast } = window.Sonner;
 
 // Vercel 환경 변수에서 Supabase URL과 Key를 읽어옵니다.
 // 'vite.config.ts'가 이 변수들을 실제 값으로 교체해줍니다.
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-const supabaseKey = import.meta.env.VITE_SUPABASE_KEY;
+const supabaseUrl = __SUPABASE_URL__;
+const supabaseKey = __SUPABASE_KEY__;
 
 // PO님의 `utils/supabase/client.ts` 파일을 여기에 합쳤습니다.
 const createClient = () => {
