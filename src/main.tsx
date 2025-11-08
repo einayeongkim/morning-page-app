@@ -3,22 +3,24 @@ import ReactDOM from 'react-dom/client';
 
 // -- 1. Supabase/Sonner 클라이언트 설정 (수정됨) --
 
-// 'esm.sh' CDN을 사용합니다.
-// 이 CDN은 @supabase/auth-js 같은 내부 부품들을
-// 하나로 합쳐서(번들링) 제공하여 런타임 오류를 방지합니다.
-import { createClient as createSupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { Toaster as SonnerToaster, toast as sonnerToast } from "https://esm.sh/sonner@1.5.0";
+// [CPO 최종 수정]
+// 'import ... from "https-url"' 대신,
+// index.html이 로드한 전역(window) 변수를 사용합니다.
+// @ts-ignore
+const { createClient: createSupabaseClient } = window.supabase;
+// @ts-ignore
+const { Toaster: SonnerToaster, toast: sonnerToast } = window.Sonner;
 
 
 // Vercel 환경 변수에서 Supabase URL과 Key를 읽어옵니다.
-// VITE_... 변수는 vite.config.ts의 'es2020' 타겟 설정이 있어야 정상 작동합니다.
+// 'vite.config.ts'가 이 변수들을 실제 값으로 교체해줍니다.
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 const supabaseKey = import.meta.env.VITE_SUPABASE_KEY;
 
 // PO님의 `utils/supabase/client.ts` 파일을 여기에 합쳤습니다.
 const createClient = () => {
-  if (!supabaseUrl || !supabaseKey) {
-    console.error("Supabase URL/Key가 없습니다. Vercel 환경변수(VITE_...)를 확인하세요.");
+  if (!supabaseUrl || !supabaseKey || !createSupabaseClient) {
+    console.error("Supabase URL/Key 또는 클라이언트가 로드되지 않았습니다.");
     // Vercel 배포 환경에서는 목업(Mock)이 아닌, 실제 클라이언트가 생성되어야 합니다.
     // 흰 화면 오류를 방지하기 위해 최소한의 목업 객체를 반환합니다.
     return { 
@@ -44,7 +46,7 @@ const createClient = () => {
 };
 
 // -- 2. PO님의 `App.tsx` 코드 (본체) --
-// PO님께서 Figma에서 가져오신 `App` 코드가 여기에 포함됩니다.
+// (이전과 동일 - PO님의 Figma 코드 로직)
 
 type Screen = 'welcome' | 'login' | 'email-auth' | 'reminder-setup' | 'editor' | 'home' | 'past-entry' | 'settings' | 'account';
 
@@ -91,9 +93,6 @@ function App() {
             reminderTime: session.user.user_metadata?.reminderTime,
           };
           setUser(userData);
-          // 로그인/가입 직후 checkSession이 'home'으로 보내기 전에
-          // 이 리스너가 먼저 실행될 수 있으므로, 여기서 'home'으로 강제 이동하지 않습니다.
-          // (PO님의 Figma 코드 로직 존중)
         } else {
           setUser(null);
           setCurrentScreen('welcome');
@@ -208,15 +207,6 @@ function App() {
   // -- 렌더링 로직 --
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* Tailwind CSS를 CDN으로 로드합니다. 
-        이 코드가 없으면 목업 컴포넌트의 스타일이 적용되지 않습니다.
-        index.html에 <script src="https://cdn.tailwindcss.com"></script>가 
-        이미 포함되어 있다면 이 부분은 없어도 됩니다.
-        하지만 Vercel 빌드 환경에서는 index.html이 아닌 여기서 로드해야 할 수 있으므로, 
-        안전하게 <style> 태그로 CDN을 import하는 것이 좋습니다.
-        (단, 이 방식은 Vite에서 권장되지 않으므로 index.html에 넣는 것이 최선입니다.)
-      */}
-      
       <SonnerToaster /> {/* 'sonner' 알림창 컴포넌트 */}
       
       {currentScreen === 'welcome' && (
@@ -258,7 +248,7 @@ function App() {
           key={refreshTrigger} // 저장 후 홈 화면이 새로고침(데이터 다시 불러오기)되도록 key 추가
           user={user}
           onWriteToday={handleWriteToday}
-          onViewEntry={handleViewPastEntry}
+          onViewEntry={handleViewEntry}
           onLogout={handleLogout}
           onNavigateToSettings={() => setCurrentScreen('settings')}
         />
@@ -292,10 +282,7 @@ function App() {
 
 
 // -- 3. 목업(Mockup) 컴포넌트 --
-// PO님의 `src/components` 폴더 안의 파일들을 여기에 임시로 합쳤습니다.
-// Vercel이 이 파일들을 찾지 못해 빌드 에러가 났던 것입니다.
-// 스타일링을 위해 Tailwind CSS 클래스를 사용합니다.
-// (index.html에 Tailwind CDN <script>가 로드되어야 합니다)
+// (이전과 동일)
 
 // 공용 컴포넌트 (디자인 개선)
 const PlaceholderComponent = ({ name, onBack, children }: { name: string; onBack?: () => void; children?: React.ReactNode }) => (
@@ -370,10 +357,6 @@ const EmailAuthScreen = ({ onBack, onSuccess }: { onBack: () => void; onSuccess:
       if (error) setMessage(error.message);
       else if (data.user) {
         setMessage('로그인 성공! 홈으로 이동합니다.');
-        // 로그인 성공 시 'home'으로 바로 가야 하지만, App.tsx의 onAuthStateChange가 처리합니다.
-        // 여기서는 onSuccess를 호출하지 않고, onAuthStateChange가 user를 설정하고
-        // checkSession이 'home'으로 보내도록 기다립니다.
-        // (단, PO님의 원본 App.tsx 코드는 onSuccess를 호출하므로, 그 로직을 따릅니다.)
         onSuccess(data.user);
       }
     }
@@ -518,7 +501,7 @@ const HomeScreen = ({ user, onWriteToday, onViewEntry, onLogout, onNavigateToSet
       </button>
       <div className="flex justify-between mt-4">
         <button onClick={onNavigateToSettings} className="text-gray-600 hover:underline">설정</button>
-        <button onClick={onLogout} className="text-red-500 hover:underline">로그아웃</button>
+        <button onClick={onLogout} className="text-red-500 hover:underline">로그웃</button>
       </div>
     </PlaceholderComponent>
   );
