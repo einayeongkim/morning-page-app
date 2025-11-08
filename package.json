@@ -11,7 +11,7 @@
   "dependencies": {
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
-    "@motionone/react": "10.18.0"
+    "motion": "10.18.0"
   },
   "devDependencies": {
     "@vitejs/plugin-react": "^4.3.1",
