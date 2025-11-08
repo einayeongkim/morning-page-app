@@ -3,7 +3,7 @@ import ReactDOM from 'react-dom/client';
 
 // -- 1. Supabase/Sonner 클라이언트 설정 (수정됨) --
 
-// [CPO 최종 수정]
+// [CPO 최종 수정 1]
 // 'import ... from "https-url"' 대신,
 // index.html이 로드한 전역(window) 변수를 사용합니다.
 // @ts-ignore
@@ -13,8 +13,10 @@ const { Toaster: SonnerToaster, toast: sonnerToast } = window.Sonner;
 
 
 // Vercel 환경 변수에서 Supabase URL과 Key를 읽어옵니다.
-// 'vite.config.ts'가 이 변수들을 실제 값으로 교체해줍니다.
+// [CPO 최종 수정 2] 'import.meta.env' 대신 'vite.config.ts'가 주입해주는 전역 변수를 사용합니다.
+// @ts-ignore // (TypeScript가 이 전역 변수를 모르기 때문에 경고를 무시합니다)
 const supabaseUrl = __SUPABASE_URL__;
+// @ts-ignore
 const supabaseKey = __SUPABASE_KEY__;
 
 // PO님의 `utils/supabase/client.ts` 파일을 여기에 합쳤습니다.
@@ -248,7 +250,7 @@ function App() {
           key={refreshTrigger} // 저장 후 홈 화면이 새로고침(데이터 다시 불러오기)되도록 key 추가
           user={user}
           onWriteToday={handleWriteToday}
-          onViewEntry={handleViewEntry}
+          onViewEntry={handleViewPastEntry} // [CPO 수정] handleViewEntry -> handleViewPastEntry
           onLogout={handleLogout}
           onNavigateToSettings={() => setCurrentScreen('settings')}
         />
@@ -501,7 +503,7 @@ const HomeScreen = ({ user, onWriteToday, onViewEntry, onLogout, onNavigateToSet
       </button>
       <div className="flex justify-between mt-4">
         <button onClick={onNavigateToSettings} className="text-gray-600 hover:underline">설정</button>
-        <button onClick={onLogout} className="text-red-500 hover:underline">로그웃</button>
+        <button onClick={onLogout} className="text-red-500 hover:underline">로그아웃</button>
       </div>
     </PlaceholderComponent>
   );
